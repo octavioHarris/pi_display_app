@@ -8,41 +8,64 @@ import subprocess
 
 root = None
 
-def exception_handler(args, attachments):
+supported_bash_commands = [
+    'screen-on',
+    'screen-off',
+    'update-repo'
+]
 
-    raise Exception(args[0])
+def exception_handler(message):
 
-def print_handler(args, attachments):
+    run_command('screen-on')
+    
+    raise Exception(message.args[0])
 
-    for arg in args:
+def print_handler(message):
+
+    run_command('screen-on')
+
+    for arg in message.args:
         print(arg)
 
-def program_exit(args, attachments):
+def exit_handler():
+
+    run_command('screen-on')
 
     if root:
+        root.attributes('-fullscreen', False)
         root.destroy()
  
     quit()
 
-def restart(args, attachments):
+def restart_handler():
    
+    run_command('screen-on')
+    
     if root:
+        root.attributes('-fullscreen', False)
         root.quit()
 
-    # Return false to stop the listener
-    return False
+def update_handler():
 
-def update(args, attachments):
+    run_command('screen-on')
+    run_command('update-repo')
+    restart_handler()
 
-    subprocess.call('bash ./sync_repo.sh')
-    return restart(args, attachments)
+def run_command(command):
+
+    if not command in supported_bash_commands: return
+    call_args = ['bash', './scripts/commands.sh', command]
+    return_val = subprocess.call(call_args)
+
+    if return_val != 0:
+        raise Exception('Error using commands.sh')
 
 def run(email_listener, settings):
 
     # Register the handlers for the types of actions
-    email_listener.register_handler('update', update)
-    email_listener.register_handler('restart', restart)
-    email_listener.register_handler('exit', program_exit)
+    email_listener.register_handler('update', update_handler, noargs=True)
+    email_listener.register_handler('restart', restart_handler, noargs=True)
+    email_listener.register_handler('exit', exit_handler, noargs=True)
     email_listener.register_handler('print', print_handler)
     email_listener.register_handler('exception', exception_handler)
    
@@ -59,9 +82,10 @@ def run(email_listener, settings):
         root.after(int(email_listener.poll_interval * 1000), poll_email)
         email_listener.process_latest_email()
 
-    # Set the email_listener to running
+    # Set the email_listener to running and wake screen
     email_listener.running = True
-    
+    run_command('screen-on')
+
     # Start polling email and enter main event loop
     root.after(0, poll_email)
     root.mainloop()
