@@ -8,23 +8,23 @@ import subprocess
 
 root = None
 
-def exception_handler(text_segments, attachments):
+def exception_handler(args, attachments):
 
-    raise Exception(text_segments[0])
+    raise Exception(args[0])
 
-def print_handler(text_segments, attachments):
+def print_handler(args, attachments):
 
-    for text in text_segments:
-        print(text)
+    for arg in args:
+        print(arg)
 
-def program_exit(text_segments, attachments):
+def program_exit(args, attachments):
 
     if root:
         root.destroy()
  
     quit()
 
-def restart(text_segments, attachments):
+def restart(args, attachments):
    
     if root:
         root.quit()
@@ -32,9 +32,15 @@ def restart(text_segments, attachments):
     # Return false to stop the listener
     return False
 
+def update(args, attachments):
+
+    subprocess.call('bash ./sync_repo.sh')
+    return restart(args, attachments)
+
 def run(email_listener, settings):
 
     # Register the handlers for the types of actions
+    email_listener.register_handler('update', update)
     email_listener.register_handler('restart', restart)
     email_listener.register_handler('exit', program_exit)
     email_listener.register_handler('print', print_handler)
