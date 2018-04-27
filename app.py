@@ -1,12 +1,13 @@
 #!/usr/bin/python
 
+from PIL import Image, ImageTk
 import traceback
 import ConfigParser
-import Tkinter
+import Tkinter as tk
 import subprocess
-#import threading
 
 root = None
+email_listener = None
 
 supported_bash_commands = [
     'screen-on',
@@ -51,6 +52,24 @@ def update_handler():
     run_command('update-repo')
     restart_handler()
 
+def background_handler(message):
+    
+    message.save_attachments(map_file_to_directory)
+
+    background_name = './pictures/' + message.parts[0]
+    background_photo = Image.open(background_name)
+    background_image = ImageTk.PhotoImage(background_photo)
+    background_label.configure(image=background_image)
+    background_label.image = background_image
+    background_label.pack(fill=tk.BOTH, expand=tk.YES)
+
+def map_file_to_directory(filename):
+
+    if filename.endswith('png') or filename.endswith('jpg'):
+        return './pictures/'
+    
+    return './unsorted_attachments/'        
+
 def run_command(command):
 
     if not command in supported_bash_commands: return
@@ -63,6 +82,7 @@ def run_command(command):
 def run(email_listener, settings):
 
     # Register the handlers for the types of actions
+    email_listener.register_handler('background', background_handler)
     email_listener.register_handler('update', update_handler, noargs=True)
     email_listener.register_handler('restart', restart_handler, noargs=True)
     email_listener.register_handler('exit', exit_handler, noargs=True)
@@ -71,7 +91,7 @@ def run(email_listener, settings):
    
     # Initialize and open the Tkinter window
     global root
-    root = Tkinter.Tk()
+    root = tk.Tk()
     root.attributes('-fullscreen', True) 
 
     # Function to poll email using Tkinter's after function
@@ -88,6 +108,15 @@ def run(email_listener, settings):
 
     # Start polling email and enter main event loop
     root.after(0, poll_email)
+
+
+    global background_label
+    background_photo = Image.open('./pictures/ali_birthday.png')
+    background_image = ImageTk.PhotoImage(background_photo)
+    background_label = tk.Label(root, image=background_image)
+    background_label.image = background_image
+    background_label.pack(fill=tk.BOTH, expand=tk.YES)
+
     root.mainloop()
     root.destroy()
 
