@@ -1,131 +1,143 @@
 #!/usr/bin/python
-import re
-import time
+
+from PIL import Image, ImageTk
 import traceback
-import subprocess
 import ConfigParser
-import pynput.keyboard as keyboard
-from email_utils import EmailConnection
+import Tkinter as tk
+import subprocess
 
-# Constants used
-SEPARATOR_REGEX = '\r\n####'
-SETTINGS_FILE_PATH = './settings.ini'
-STATUS_REPORT_ADDRESS = 'harris.octavio@gmail.com'
+root = None
+email_listener = None
+backgroundlabel = None
 
-# Global variables
-terminate = False
-def restart_script():
+supported_bash_commands = [
+    'screen-on',
+    'screen-off',
+    'update-repo'
+]
 
-    print('Restarting script...')
-    subprocess.call(['python', 'receive.py'])
-    exit(0)
+def exception_handler(message):
 
-def exception_handler(text_segments, attachments):
-    raise Exception(text_segments[0])
-
-def print_handler(text_segments, attachments):
-
-    for text in text_segments:
-        print(text)
-
-def reflash_handler(content_parts, attachments):
-
-    # Verify number of attachments
-    if len(attachments) != 1:
-        print('Updating file requires 1 attachment.')
-        return
-
-    # Extract necessary information
-    attachment_filename = attachments[0]['filename']
-    attachment_contents = attachments[0]['binary']
-
-    # Write file contents to a tmp file
-    print('Updating file...')
-    with open(attachment_filename,"wb") as file:
-        file.write(attachment_contents)
-
-    # Restart script with updated file
-    restart_script()
-
-def on_press(key):
+    run_command('screen-on')
     
-    if key == keyboard.Key.esc:
-        print('Terminate signal received.')
-        global terminate
-        terminate = True
-        return False
+    raise Exception(message.parts[0])
 
-def process_message(body, attachments):
+def print_handler(message):
 
-    # Verify passed string is not empty
-    if body == None:
-        print('Cannot process empty email body.')
-        return
+    run_command('screen-on')
 
-    # Extract message type and text segments
-    parts = re.split(SEPARATOR_REGEX, body)
-    parts = map(str.strip, parts)
-    message_type = parts[0].strip()
-    text_segments = parts[1::]
+    for arg in message.parts:
+        print(arg)
 
-    # Verify there is a configured handler for the specified message type
-    if message_type not in handlers:
-        print('Unhandled message type: ' + message_type)
-        return
+def exit_handler():
 
-    # Call the appropriate handler
-    handlers[message_type](text_segments, attachments)
-   
-def run(connection, event_logger):
-  
-    # Read from settings.ini file
-    config = ConfigParser.ConfigParser()
-    config.optionxform=str 
-    config.read(SETTINGS_FILE_PATH) 
+    run_command('screen-on')
 
-    # Extract program settings 
-    READ_INTERVAL = float(config.get('PROGRAM', 'READ_INTERVAL'))
-    LAST_PROCESSED_ID_FILE = config.get('PROGRAM', 'LAST_PROCESSED_ID_FILE')
+    if root:
+        root.attributes('-fullscreen', False)
+        root.destroy()
  
-    # Listen for esc to be pressed to exit
-    with keyboard.Listener(on_press=on_press) as listener:
+    quit()
+
+def restart_handler():
    
-        # Set up times for repeating reads
-        next_read_time = time.time() + READ_INTERVAL
+    run_command('screen-on')
+    
+    if root:
+        root.attributes('-fullscreen', False)
+        root.quit()
 
-        while not terminate:
+def update_handler():
 
-            last_id = connection.fetch_email_ids()[-1]
-            
-            # Check the last processed message
-            with open(LAST_PROCESSED_ID_FILE, 'a+') as file:
-                last_processed_id = file.readline()
+    run_command('screen-on')
+    run_command('update-repo')
+    restart_handler()
 
-            
-            if not last_processed_id or last_id != last_processed_id.strip():
-                
-                # Save the id of the last processed email
-                with open(LAST_PROCESSED_ID_FILE, 'w') as file:
-                    file.write(last_id)
+def background_handler(message):
+   
+    run_command('screen-on')
 
-                # Process the contents of the email
-                body, attachments = connection.fetch_email(last_id)
-                process_message(body, attachments)
+    message.save_attachments(map_file_to_directory)
+    
+    width = root.winfo_screenwidth()
+    height = root.winfo_screenheight()
 
-            # Sleep from now until next specified read time
-            time.sleep(next_read_time - time.time())
-            next_read_time += READ_INTERVAL
+    print(str(height) + 'X' + str(width))
+
+    path = './pictures/' + message.parts[0]
+    photo = Image.open(path).resize((width, height), Image.ANTIALIAS)
+    image = ImageTk.PhotoImage(photo)
+    background_label.configure(image=image)
+    background_label.image = image
+    background_label.pack()
+
+def map_file_to_directory(filename):
+
+    if filename.endswith('png') or filename.endswith('jpg'):
+        return './pictures/'
+    
+    return './unsorted_attachments/'        
+
+def run_command(command):
+
+    if not command in supported_bash_commands: return
+    call_args = ['bash', './scripts/commands.sh', command]
+    return_val = subprocess.call(call_args)
+
+    if return_val != 0:
+        raise Exception('Error using commands.sh')
+
+def run(email_listener, settings):
+
+    # Register the handlers for the types of actions
+    email_listener.register_handler('background', background_handler)
+    email_listener.register_handler('update', update_handler, noargs=True)
+    email_listener.register_handler('restart', restart_handler, noargs=True)
+    email_listener.register_handler('exit', exit_handler, noargs=True)
+    email_listener.register_handler('print', print_handler)
+    email_listener.register_handler('exception', exception_handler)
+   
+    # Initialize and open the Tkinter window
+    global root
+    root = tk.Tk()
+    root.attributes('-fullscreen', True) 
+
+    # Function to poll email using Tkinter's after function
+    def poll_email():
+        
+        if not email_listener.running: return
+
+        root.after(int(email_listener.poll_interval * 1000), poll_email)
+        
+        try:
+            email_listener.process_latest_email()
+        except Exception as e:
+            global exception
+            exception = e
+            email_listener.stop()
+            root.quit()
+
+    # Set the email_listener to running and wake screen
+    email_listener.running = True
+    run_command('screen-on')
+
+    # Create components
+    global background_label 
+    background_label = tk.Label(root)
+
+    # Start polling email and enter main event loop
+    root.after(0, poll_email)
+    root.mainloop()
+    root.destroy()
+
+    # If the main loop was exited by an exception, then raise that exception
+    if exception:
+        raise exception
 
 def main():
     
     connection = init_email_connection()
     run(connection)
-
-handlers = {
-    'print': print_handler,
-    'reflash' : reflash_handler,
-    'exception' : exception_handler
-}
 
 if __name__ == '__main__':
     try:
