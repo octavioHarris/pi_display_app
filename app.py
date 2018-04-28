@@ -8,6 +8,7 @@ import subprocess
 
 root = None
 email_listener = None
+backgroundlabel = None
 
 supported_bash_commands = [
     'screen-on',
@@ -19,13 +20,13 @@ def exception_handler(message):
 
     run_command('screen-on')
     
-    raise Exception(message.args[0])
+    raise Exception(message.parts[0])
 
 def print_handler(message):
 
     run_command('screen-on')
 
-    for arg in message.args:
+    for arg in message.parts:
         print(arg)
 
 def exit_handler():
@@ -53,15 +54,22 @@ def update_handler():
     restart_handler()
 
 def background_handler(message):
-    
-    message.save_attachments(map_file_to_directory)
+   
+    run_command('screen-on')
 
-    background_name = './pictures/' + message.parts[0]
-    background_photo = Image.open(background_name)
-    background_image = ImageTk.PhotoImage(background_photo)
-    background_label.configure(image=background_image)
-    background_label.image = background_image
-    background_label.pack(fill=tk.BOTH, expand=tk.YES)
+    message.save_attachments(map_file_to_directory)
+    
+    width = root.winfo_screenwidth()
+    height = root.winfo_screenheight()
+
+    print(str(height) + 'X' + str(width))
+
+    path = './pictures/' + message.parts[0]
+    photo = Image.open(path).resize((width, height), Image.ANTIALIAS)
+    image = ImageTk.PhotoImage(photo)
+    background_label.configure(image=image)
+    background_label.image = image
+    background_label.pack()
 
 def map_file_to_directory(filename):
 
@@ -100,25 +108,31 @@ def run(email_listener, settings):
         if not email_listener.running: return
 
         root.after(int(email_listener.poll_interval * 1000), poll_email)
-        email_listener.process_latest_email()
+        
+        try:
+            email_listener.process_latest_email()
+        except Exception as e:
+            global exception
+            exception = e
+            email_listener.stop()
+            root.quit()
 
     # Set the email_listener to running and wake screen
     email_listener.running = True
     run_command('screen-on')
 
+    # Create components
+    global background_label 
+    background_label = tk.Label(root)
+
     # Start polling email and enter main event loop
     root.after(0, poll_email)
-
-
-    global background_label
-    background_photo = Image.open('./pictures/ali_birthday.png')
-    background_image = ImageTk.PhotoImage(background_photo)
-    background_label = tk.Label(root, image=background_image)
-    background_label.image = background_image
-    background_label.pack(fill=tk.BOTH, expand=tk.YES)
-
     root.mainloop()
     root.destroy()
+
+    # If the main loop was exited by an exception, then raise that exception
+    if exception:
+        raise exception
 
 def main():
     
