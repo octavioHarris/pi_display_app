@@ -20,44 +20,37 @@ supported_bash_commands = [
     'update-repo'
 ]
 
+### HANDLERS ###
+
 def exception_handler(message):
 
-    run_command('screen-on')
-    
     raise Exception(message.parts[0])
 
 def print_handler(message):
 
-    run_command('screen-on')
-
     for arg in message.parts:
         print(arg)
 
-def exit_handler():
-
-    run_command('screen-on')
-
+def exit_handler(message):
+    
     if root:
         root.attributes('-fullscreen', False)
         root.destroy()
  
     quit()
 
-def restart_handler():
+def restart_handler(message):
    
-    run_command('screen-on')
-    
     if root:
         root.attributes('-fullscreen', False)
         root.quit()
 
-def update_handler():
+def update_handler(message):
 
-    run_command('screen-on')
     run_command('update-repo')
-    restart_handler()
+    restart_handler(message)
 
-def background_handler(message):
+def set_background(message):
    
     message.save_attachments(map_file_to_directory)
    
@@ -67,14 +60,34 @@ def background_handler(message):
     components['background'] = image_tk
     canvas.itemconfig(background_element, image=image_tk)     
 
-    run_command('screen-on')
+def message(message):
+ 
+    canvas.bind("<Button-1>", clear_message)
+    set_overlay_opacity(180)
+    canvas.itemconfig(overlay_text, text=message.parts[0])
 
-def map_file_to_directory(filename):
+def clear_message(message):
 
-    if filename.endswith('png') or filename.endswith('jpg'):
-        return './pictures/'
+    canvas.unbind("<Button-1>")
+    set_overlay_opacity(0)
+    canvas.itemconfig(overlay_text, text="")
+
+### HELPER FUNCTIONS ###
+
+def handler_wrapper(handler):
     
-    return './unsorted_attachments/'        
+    def wrapper(message):
+        run_command('screen-on')
+        handler(message)
+    
+    return wrapper
+
+def set_overlay_opacity(value):
+
+    overlay_img = Image.new('RGBA', (screen_width, screen_height), (0,0,0,value))
+    overlay_img_tk = ImageTk.PhotoImage(overlay_img)
+    components['overlay'] = overlay_img_tk
+    canvas.itemconfig(overlay_element, image=overlay_img_tk)
 
 def run_command(command):
 
@@ -85,48 +98,36 @@ def run_command(command):
     if return_val != 0:
         raise Exception('Error using commands.sh')
 
-def message(message):
- 
-    canvas.bind("<Button-1>", clear_message)
-    set_overlay_opacity(180)
-    canvas.itemconfig(overlay_text, text=message.parts[0])
-    run_command('screen-on')
-
-def clear_message():
-
-    canvas.unbind("<Button-1>")
-    set_overlay_opacity(0)
-    canvas.itemconfig(overlay_text, text="")
-    run_command('screen-on')
-
 def send_message_callback(message):
 
     def wrapper():
-
         connection.send_email('harris.octavio@gmail.com', message.upper(), message)
 
     return wrapper
 
-def set_overlay_opacity(value):
+def map_file_to_directory(filename):
 
-    # Add darkening to the screen
-    overlay_img = Image.new('RGBA', (screen_width, screen_height), (0,0,0,value))
-    overlay_img_tk = ImageTk.PhotoImage(overlay_img)
-    components['overlay'] = overlay_img_tk
-    canvas.itemconfig(overlay_element, image=overlay_img_tk)
+    if filename.endswith('png') or filename.endswith('jpg'):
+        return './pictures/'
+    
+    return './unsorted_attachments/'        
+
+### MAIN APP ###
 
 def run(email_connection, email_listener, settings):
 
     global connection
     connection = email_connection
 
+    email_listener.set_handler_wrapper(handler_wrapper)
+
     # Register the handlers for the types of actions
-    email_listener.register_handler('background', background_handler)
+    email_listener.register_handler('background', set_background)
     email_listener.register_handler('message', message)
-    email_listener.register_handler('clear_message', clear_message, noargs=True)
-    email_listener.register_handler('update', update_handler, noargs=True)
-    email_listener.register_handler('restart', restart_handler, noargs=True)
-    email_listener.register_handler('exit', exit_handler, noargs=True)
+    email_listener.register_handler('clear_message', clear_message)
+    email_listener.register_handler('update', update_handler)
+    email_listener.register_handler('restart', restart_handler)
+    email_listener.register_handler('exit', exit_handler)
     email_listener.register_handler('print', print_handler)
     email_listener.register_handler('exception', exception_handler)
    
