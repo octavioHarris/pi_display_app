@@ -87,14 +87,14 @@ def run_command(command):
 
 def message(message):
  
-    run_command('screen-on')
+    canvas.bind("<Button-1>", clear_message)
     set_overlay_opacity(180)
     canvas.itemconfig(overlay_text, text=message.parts[0])
     run_command('screen-on')
 
 def clear_message():
 
-    run_command('screen-on')
+    canvas.unbind("<Button-1>")
     set_overlay_opacity(0)
     canvas.itemconfig(overlay_text, text="")
     run_command('screen-on')
@@ -160,7 +160,6 @@ def run(email_connection, email_listener, settings):
 
     # Set the email_listener to running and wake screen
     email_listener.running = True
-    run_command('screen-on')
 
     # Create components
     global canvas
@@ -182,22 +181,19 @@ def run(email_connection, email_listener, settings):
     image_tk = ImageTk.PhotoImage(image)
     background_element = canvas.create_image(0, 0, image=image_tk, anchor=tk.NW)
 
-    # Add clear overlay and empty text 
-    initial_text = "Sorry for being a crappy boyfriend"
-    overlay_img = Image.new('RGBA', (screen_width, screen_height), (0,0,0,180))
-    overlay_img_tk = ImageTk.PhotoImage(overlay_img)
-    overlay_element = canvas.create_image(0, 0, image=overlay_img_tk, anchor=tk.NW)
-    overlay_text = canvas.create_text((screen_width-150)/2, screen_height/2, anchor=tk.CENTER, text=initial_text, fill="yellow",font="Times 30 italic bold")
-
     # Add frame to canvas
     frame = tk.Frame(bg="black", height=screen_height,width=150)
     frame.grid_propagate(False)
     frame.columnconfigure(0, weight=1)
     canvas.create_window(screen_width, 0, window=frame, anchor=tk.NE)
     
-    # Clear message on click
-    canvas.bind("<Button-1>", lambda e: clear_message())
-    
+    # Add clear overlay and empty text 
+    initial_text = ""
+    overlay_img = Image.new('RGBA', (screen_width, screen_height), (0,0,0,0))
+    overlay_img_tk = ImageTk.PhotoImage(overlay_img)
+    overlay_element = canvas.create_image(0, 0, image=overlay_img_tk, anchor=tk.NW)
+    overlay_text = canvas.create_text((screen_width-150)/2, screen_height/2, anchor=tk.CENTER, text=initial_text, fill="yellow",font="Times 30 italic bold")
+
     # Add buttons to fram
     button_configs = [{   
         'text': "Oct is dumb",
@@ -211,6 +207,9 @@ def run(email_connection, email_listener, settings):
     },{
         'text': "I hate you",
         'callback': send_message_callback("Emily: I hate you")
+    },{
+        'text': "He disgusts me",
+        'callback': send_message_callback("Emily: You disgust me")
     }]
 
     # Add buttons to frame
@@ -220,7 +219,10 @@ def run(email_connection, email_listener, settings):
 
         button = ttk.Button(frame, text=config['text'], command=config['callback'])
         button.grid(row=index, column=0, padx=5, pady=5, sticky="nsew")
-    
+
+    # Force screen on before tkinter main loop begins
+    run_command('screen-on')
+
     # Start polling email and enter main event loop
     root.after(0, poll_email)
     root.mainloop()
