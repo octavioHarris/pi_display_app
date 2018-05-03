@@ -195,30 +195,17 @@ def run(email_connection, email_listener, settings):
     overlay_element = canvas.create_image(0, 0, image=overlay_img_tk, anchor=tk.NW)
     overlay_text = canvas.create_text((screen_width-150)/2, screen_height/2, anchor=tk.CENTER, text=initial_text, fill="yellow",font="Times 30 italic bold")
 
-    # Add buttons to fram
-    button_configs = [{   
-        'text': "Oct is dumb",
-        'callback': send_message_callback("Emily: you're dumb.")
-    },{
-        'text': "Why is Oct late",
-        'callback': send_message_callback("Emily: why are you always late")
-    },{
-        'text': "No one is uglier...",
-        'callback': send_message_callback("Emily: No one is uglier than you with your clothes off")
-    },{
-        'text': "I hate you",
-        'callback': send_message_callback("Emily: I hate you")
-    },{
-        'text': "He disgusts me",
-        'callback': send_message_callback("Emily: You disgust me")
-    }]
-
     # Add buttons to frame
-    for index, config in enumerate(button_configs):
+    buttons_settings = settings['BUTTONS']
+   
+    for index, button_settings  in enumerate(buttons_settings):
     
         frame.rowconfigure(index, weight=1, uniform="right_buttons")
 
-        button = ttk.Button(frame, text=config['text'], command=config['callback'])
+        button_text = button_settings['text']
+        button_action = send_message_callback(button_settings['message'])
+
+        button = ttk.Button(frame, text=button_text, command=button_action)
         button.grid(row=index, column=0, padx=5, pady=5, sticky="nsew")
 
     # Force screen on before tkinter main loop begins
