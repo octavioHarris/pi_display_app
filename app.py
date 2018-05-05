@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3.5
 
 from PIL import Image, ImageTk
 import os
@@ -11,7 +11,6 @@ root = None
 exception = None
 email_listener = None
 components = {}
-
 
 supported_bash_commands = [
     'screen-on',
@@ -97,10 +96,17 @@ def run_command(command):
     if return_val != 0:
         raise Exception('Error using commands.sh')
 
-def send_message_callback(message):
+def button_callback(index, message):
 
     def wrapper():
+        button = components['BUTTONS'][index]
+        button_text = button['text']        
+
+        button.configure(text="Sending...")
+        root.update()
         connection.send_email('harris.octavio@gmail.com', message.upper(), message)
+        button.configure(text=button_text)
+        root.update()
 
     return wrapper
 
@@ -186,26 +192,28 @@ def run(email_connection, email_listener, settings):
     frame.grid_propagate(False)
     frame.columnconfigure(0, weight=1)
     canvas.create_window(screen_width, 0, window=frame, anchor=tk.NE)
+ 
+    # Add buttons to frame
+    buttons_settings = settings['BUTTONS']
+    components['BUTTONS'] = []   
+
+    for index, button_settings in enumerate(buttons_settings):
     
+        frame.rowconfigure(index, weight=1, uniform="right_buttons")
+
+        button_text = button_settings['text']
+        button_action = button_callback(index, button_settings['message'])
+
+        button = ttk.Button(frame, text=button_text, command=button_action)
+        button.grid(row=index, column=0, padx=5, pady=5, sticky="nsew")
+        components['BUTTONS'].append(button)
+   
     # Add clear overlay and empty text 
     initial_text = ""
     overlay_img = Image.new('RGBA', (screen_width, screen_height), (0,0,0,0))
     overlay_img_tk = ImageTk.PhotoImage(overlay_img)
     overlay_element = canvas.create_image(0, 0, image=overlay_img_tk, anchor=tk.NW)
     overlay_text = canvas.create_text((screen_width-150)/2, screen_height/2, anchor=tk.CENTER, text=initial_text, fill="yellow",font="Times 30 italic bold")
-
-    # Add buttons to frame
-    buttons_settings = settings['BUTTONS']
-   
-    for index, button_settings  in enumerate(buttons_settings):
-    
-        frame.rowconfigure(index, weight=1, uniform="right_buttons")
-
-        button_text = button_settings['text']
-        button_action = send_message_callback(button_settings['message'])
-
-        button = ttk.Button(frame, text=button_text, command=button_action)
-        button.grid(row=index, column=0, padx=5, pady=5, sticky="nsew")
 
     # Force screen on before tkinter main loop begins
     run_command('screen-on')
