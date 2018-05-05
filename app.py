@@ -3,9 +3,8 @@
 from PIL import Image, ImageTk
 import os
 import traceback
-import ConfigParser
-import Tkinter as tk
-import ttk
+import tkinter as tk
+import tkinter.ttk as ttk
 import subprocess
 
 root = None
